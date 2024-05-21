@@ -7,7 +7,7 @@ import numpy as np
 import progressbar
 from types import SimpleNamespace
 from model import VQ3DDecoder, VQ3DEncoder, CodeBook, VQVAE3D
-from dataloader.dataset import vqvae_collate_fn, VQVAEDataset
+from dataloader.dataset import vqvae_collate_fn
 from utils import load_dataset, normalize_frames, save_vq_image, save_vq_losses
 from torch.utils.data import DataLoader
 

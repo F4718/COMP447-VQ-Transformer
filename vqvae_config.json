@@ -2,7 +2,7 @@
   "lr": 0.0003,
   "batch_size": 29,
   "log_dir": "logs",
-  "model_dir": "",
+  "model_dir": "logs/road_only_all/vqvae-128x128-down_to=8.0x8.0-time_wind=2-emb_size=128-n_res=2-bias=True",
   "name": "",
   "data_root": "data",
   "optimizer": "adam",
