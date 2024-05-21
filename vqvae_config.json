@@ -11,7 +11,7 @@
   "image_size": 128,
   "channels": 1,
   "train_test_ratio": 9,
-  "train_on": "tiny",
+  "train_on": "all",
   "train_is_test": false,
   "test_towns": ["Town02", "Town06"],
   "time_window": 2,

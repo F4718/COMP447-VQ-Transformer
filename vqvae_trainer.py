@@ -153,21 +153,22 @@ def main():
             return np.mean(np.array(recon_losses)), np.mean(np.array(vq_losses))
 
     def reconstruct(epoch_idx, num_sample):
-        for i in range(num_sample):
-            # bs * c * t * h * w
-            x = next(testing_batch_generator)[0].unsqueeze(0)
-            x_tilde, _ = model(x)
+        with torch.no_grad():
+            for i in range(num_sample):
+                # bs * c * t * h * w
+                x = next(testing_batch_generator)[0].unsqueeze(0)
+                x_tilde, _ = model(x)
 
-            # become c * t * h * w
-            x = x.detach().cpu().squeeze(0)
-            x_tilde = x_tilde.detach().cpu().squeeze(0)
+                # become c * t * h * w
+                x = x.detach().cpu().squeeze(0)
+                x_tilde = x_tilde.detach().cpu().squeeze(0)
 
-            # scale again (from -1 to 1 to 0 to 255)
-            x = (((x + 1) * 128) // 1).clamp(0, 255)
-            x_tilde = (((x_tilde + 1) * 128) // 1).clamp(0, 255)
+                # scale again (from -1 to 1 to 0 to 255)
+                x = (((x + 1) * 128) // 1).clamp(0, 255)
+                x_tilde = (((x_tilde + 1) * 128) // 1).clamp(0, 255)
 
-            out_file = os.path.join(opt.log_dir, f"gen/epoch_{epoch_idx}-gen_{i + 1}.png")
-            save_vq_image(out_file, x, x_tilde)
+                out_file = os.path.join(opt.log_dir, f"gen/epoch_{epoch_idx}-gen_{i + 1}.png")
+                save_vq_image(out_file, x, x_tilde)
 
     recons_minibatch_loss = list()
     vq_minibatch_loss = list()
@@ -191,6 +192,12 @@ def main():
         save_vq_losses(loss_file, recons_minibatch_loss, vq_minibatch_loss, recons_test_loss, vq_test_loss)
 
         reconstruct(epoch, 10)
+        torch.save({
+            'encoder': encoder,
+            'decoder': decoder,
+            'codebook': codebook,
+            'opt': opt},
+            '%s/model.pth' % opt.log_dir)
 
 
 if __name__ == '__main__':
