@@ -150,7 +150,7 @@ def main():
                 rec_loss, vq_loss = loss["recon_loss"].item(), loss["vq_loss"].item()
                 recon_losses.append(rec_loss)
                 vq_losses.append(vq_loss)
-            return np.mean(np.array(recon_losses)), np.mean(np.array(vq_losses))
+        return np.mean(np.array(recon_losses)), np.mean(np.array(vq_losses))
 
     def reconstruct(epoch_idx, num_sample):
         with torch.no_grad():
