@@ -49,7 +49,7 @@ def main(opt):
 
     out_file_name = os.path.join(out_out_folder_name, "training_curve.png")
 
-    plot_loss_curve(loss_file_name, out_file_name, train_recons=True, test_recons=True, train_vq=True, test_vq=False,
+    plot_loss_curve(loss_file_name, out_file_name, train_recons=True, test_recons=True, train_vq=True, test_vq=True,
                     clip=5, show=True)
 
 

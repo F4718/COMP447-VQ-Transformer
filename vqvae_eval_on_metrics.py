@@ -86,8 +86,8 @@ def main():
         """
         if standard:
             scale = 1.0 / gt.max()
-            gt *= scale
-            pred *= scale
+            gt = gt * scale
+            pred = pred * scale
 
             threshold = 0.3
             gt = gt > threshold
@@ -118,7 +118,6 @@ def main():
         :return: float: ssim
         """
         pred = pred.float()
-        pred = pred.clamp(0, 1)
         gt = gt.float()
         ssim_value = ssim(pred, gt, kernel_size=11, data_range=1.0, reduction="mean")
 
@@ -139,10 +138,12 @@ def main():
                 bs, c, t, h, w = x.shape
                 # convert from bs * c * t * h * w to (bs * t) * c * h * w
                 # for ssim and mean iou
-                x = x.cpu().permute(0, 2, 1, 3, 4).view(-1, c, h, w)
+                x = x.cpu().permute(0, 2, 1, 3, 4).view(-1, c, h, w).clamp(-1, 1)
                 x_tilde = x_tilde.cpu().permute(0, 2, 1, 3, 4).view(-1, c, h, w)
 
                 rec_loss = F.mse_loss(x_tilde, x)
+                x = (x.clamp(-1, 1) + 1) / 2
+                x_tilde = (x_tilde.clamp(-1, 1) + 1) / 2
                 miou.append(calculate_mean_iou(x_tilde, x))
                 ssim.append(calculate_ssim(x_tilde, x))
                 recon_losses.append(rec_loss)
@@ -160,7 +161,8 @@ def main():
     print("Ended evaluation!\n")
     print("Saving results.\n")
     eval_f_name = '%s/evaluation/results.json' % opt.log_dir
-    json.dump({"test_recon_loss": recon_loss, "test_miou": mean_iou, "test_ssim": ssim_score}, eval_f_name, indent=4)
+    with open(eval_f_name, 'w') as file:
+        json.dump({"test_recon_loss": recon_loss, "test_miou": mean_iou, "test_ssim": ssim_score}, file, indent=4)
     print(f"Results saved to {eval_f_name}\n")
 
 
