@@ -13,5 +13,19 @@ class VQTransformer(nn.Module):
     def forward(self, x, action=None):
         """
         x:          bs * c * t * h * w
-        action:     bs *
+        action:     bs * t * n or bs * n or None?
         """
+
+    def forward_on_indices(self, encoded_x, actions):
+        """
+        x:          bs * (seq_len = t * h' * w')
+        action:     bs * t * n or bs * n or None?
+        """
+        pass
+
+    def cross_entropy_loss(self, cond_x, future_x, actions):
+        """
+        x:          bs * c * t * h * w (image itself)
+        action:     bs * t * n or bs * n or None?
+        """
+        pass

@@ -15,17 +15,17 @@
   "use_vq_embeddings": true,
 
   "model_dir": "",
-  "log_dir": "t_logs",
+  "log_dir": "logs_t",
 
   "seed": 1,
   "lr": 0.0003,
   "batch_size": 29,
   "optimizer": "adam",
-  "epochs": 50,
+  "epochs": 1,
 
   "data_root": "data",
   "n_future": 10,
-  "train_on": "all",
+  "train_on": "tiny",
   "train_is_test": false,
   "test_towns": ["Town02", "Town06"],
   "train_test_ratio": 9,

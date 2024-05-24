@@ -15,7 +15,7 @@ import progressbar
 
 
 def main():
-    with open("config_vqvae.json", "r") as file:
+    with open("config_vq_transformer.json", "r") as file:
         opt = json.load(file)
         opt = SimpleNamespace(**opt)
 
@@ -96,7 +96,7 @@ def main():
         predictor = saved_model["transformer"]
     else:
         down_to = opt_vqvae.image_size / (opt_vqvae.downsample ** 2)
-        seq_len = (down_to ** 2) * opt_vqvae.time_window
+        seq_len = int((down_to ** 2) * opt_vqvae.time_window)
         vocab_size = opt_vqvae.codebook_num_emb
         the_codebook = codebook if opt.use_vq_embeddings else None
         predictor = ActionConditionedTransformer(
@@ -179,12 +179,12 @@ def main():
 
                 # get the initial seq element
                 initial_x = x[0].to(device)
-                encoded_x = vqvae_model.encode_code(initial_x)  # 1 * t * h * w -> bs * t * h * w
+                encoded_x = vqvae_model.encode_code(initial_x)  # 1 * t * h' * w' -> bs * t * h' * w'
 
                 # flatten the quantized indices
-                bs, t, h, w = encoded_x.shape
+                bs, t, h_prime, w_prime = encoded_x.shape
                 pred_sequences = list()
-                encoded_x = encoded_x.view(bs, -1)  # bs * (seq_len = t * h * w)
+                encoded_x = encoded_x.view(bs, -1)  # bs * (seq_len = t * h' * w')
                 pred_sequences.append(encoded_x)
                 # predict next sequences based on the predictions, not gt of course
                 for group_num in range(len(actions)):
@@ -195,7 +195,8 @@ def main():
 
                 reconstructions = list()
                 for seq in pred_sequences:
-                    seq = seq.view(bs, t, h, w)
+                    seq = seq.view(bs, t, h_prime, w_prime)
+                    # decode code inverts the channel dim so the below comment is the out shape
                     rec = vqvae_model.decode_code(seq)  # bs * t * h * w * c (bs is 1)
                     reconstructions.append(rec.squeeze(0).cpu())
 
