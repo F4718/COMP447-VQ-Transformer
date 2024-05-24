@@ -18,6 +18,36 @@ def vqvae_collate_fn(batch):
     return batch
 
 
+class TransformerCollateFunction:
+    def __init__(self, x_lims, y_lims):
+        self.x_lims = torch.tensor(x_lims)[None, None, None, :]
+        self.y_lims = torch.tensor(y_lims)[None, None, None, :]
+        self.num_x_bins = len(x_lims) + 1
+
+    def __call__(self, batch):
+        # frames tensor: bs * seq_len * C(1 or 2) * H * W
+        # waypoints tensor: bs * seq_len * 8 * 2
+        batch = default_collate(batch)
+        frames = batch["frames"].permute(1, 0, 2, 3, 4).to(dtype=torch.float32)  # Invert the bs and seq_len
+
+        # Discretize the waypoints
+        waypoints = batch["waypoints"]
+        waypoints[torch.isnan(waypoints)] = 0  # Replace NaNs
+
+        # Find which bin delta x and y fall into
+        x_indices = torch.sum(waypoints[:, :, :, 0:1] > self.x_lims, dim=-1)
+        y_indices = torch.sum(waypoints[:, :, :, 1:2] > self.y_lims, dim=-1)
+        y_indices = y_indices * self.num_x_bins
+
+        discretized_waypoints = (x_indices + y_indices).permute(1, 0, 2).int()  # Invert the bs and seq_len
+
+        # seq_len * bs * c * h * w
+        # seq_len * bs * 8
+        batch = {"frames": frames, "actions": discretized_waypoints}
+
+        return batch
+
+
 class VQVAEDataset(Dataset):
     def __init__(self, data_path, seq_length=2, step=None, road_only=True, samples=None):
         assert step is None, "Step is for compatibility in utils, is never used for VQVAE dataset"

@@ -98,11 +98,41 @@ def load_dataset(optt, is_vqvae=False):
 
 
 def normalize_data(dtype1, dtype2, sequence):
-    # squeeze images into 0-1
+    # squeeze images into -1 and 1
     frames = sequence["frames"]
     actions = sequence["actions"]
-    frames /= 256.0
+    frames = (frames / 128.0) - 1
     return frames.type(dtype1), actions.type(dtype2)
+
+
+def reshape_data(opt, x, actions):
+    """
+    params:
+    # x: seq_len * bs * c * h * w
+    # actions: seq_len * bs * 8
+    returns:
+    x: num_group, bs, c, t, h, w
+    actions: (num_group - 1) * bs * t * 8 or (num_group - 1) * bs * 8
+    """
+    # group to form dimension t
+    seq, bs, c, h, w = x.shape
+    x = x.view(-1, opt.n_past, bs, c, h, w)
+    x = x.permute(0, 2, 3, 1, 4, 5)  # num_group, bs, c, t, h, w
+
+    if opt.first_action_only:
+        # take the last action from each sequence group element
+        # idx:(1,3,5,7,9,11) if n_past=2 n_future=10 (among 0-11)
+        # no need for the last one, nothing to predict there
+        actions = actions[(opt.n_past - 1)::opt.n_past]
+        actions = actions[:-1]  # (num_group - 1) * bs * 8
+    else:
+        # exclude the last one and the first (opt.n_past - 1)
+        seq, bs, n = actions.shape
+        actions = actions[(opt.n_past - 1):-1]
+        actions = actions.view(-1, opt.n_past, bs, n)  # (num_group - 1) * t * bs * 8
+        actions = actions.permute(0, 2, 1, 3)  # (num_group - 1) * bs * t * 8
+
+    return x, actions
 
 
 def normalize_frames(dtype, sequence):
@@ -134,13 +164,10 @@ def init_weights(m):
 
 
 def save_vq_losses(file_path, recons_minibatch_loss, vq_minibatch_loss, recons_test_loss, vq_test_loss):
-    # Ensure the parent directory exists
-    os.makedirs(os.path.dirname(file_path), exist_ok=True)
-
     # Prepare the dictionary to be dumped
     loss_data = {}
     for i in range(len(recons_test_loss)):
-        epoch_key = f'epoch{i + 1}'
+        epoch_key = f'epoch_{i + 1}'
         loss_data[epoch_key] = {
             'train_recons_loss': sum(recons_minibatch_loss[i]) / len(recons_minibatch_loss[i]),
             'train_vq_loss': sum(vq_minibatch_loss[i]) / len(vq_minibatch_loss[i]),
@@ -150,6 +177,22 @@ def save_vq_losses(file_path, recons_minibatch_loss, vq_minibatch_loss, recons_t
             'train_vq_minibatch_losses': vq_minibatch_loss[i]
         }
 
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    with open(file_path, 'w') as json_file:
+        json.dump(loss_data, json_file, indent=4)
+    print(f"Loss data saved to {file_path}")
+
+
+def save_transformer_losses(file_path, train_mini_losses, test_losses):
+    # Prepare the dictionary to be dumped
+    loss_data = {}
+    for i in range(len(test_losses)):
+        epoch_key = f'epoch_{i + 1}'
+        loss_data[epoch_key] = {
+            'train_cross_entropy_loss': sum(train_mini_losses[i]) / len(train_mini_losses[i]),
+            'test_cross_entropy_loss': test_losses[i],
+            'train_minibatch_cross_entropy_losses': train_mini_losses[i]
+        }
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
     with open(file_path, 'w') as json_file:
         json.dump(loss_data, json_file, indent=4)
@@ -223,6 +266,74 @@ def save_eval(f_name, mse, miou, ssim, plot_dir=None):
         plt.legend()
         plt.savefig(os.path.join(plot_dir, "miou_ssim_across_frames.png"))
         plt.close()
+
+
+def save_as_image(gt, preds, out_path):
+    """
+    concat gt horizontally
+    concat preds horizontally
+    concat gt and preds vertically (gt on top)
+    gt and preds are 0-255
+    - gt (tensor): ground truth tensor with shape (seq_len, h, w, c)
+    - preds (tensor): predictions tensor with shape (seq_len, h, w, c)
+    """
+    seq_len, h, w, c = gt.shape
+    assert gt.shape == preds.shape, "gt and preds must have the same shape"
+
+    gt_array = gt.numpy()
+    preds_array = preds.numpy()
+
+    # handle channels
+    if c == 1:
+        gt_array = np.concatenate([np.zeros_like(gt_array), np.zeros_like(gt_array), gt_array], axis=-1)
+        preds_array = np.concatenate([np.zeros_like(preds_array), np.zeros_like(preds_array), preds_array], axis=-1)
+    elif c == 2:
+        gt_array = np.concatenate([np.zeros_like(gt_array[:, :, :, 0:1]), gt_array], axis=-1)
+        preds_array = np.concatenate([np.zeros_like(preds_array[:, :, :, 0:1]), preds_array], axis=-1)
+
+    # concat horizontally
+    gt_combined = np.concatenate(gt_array, axis=1)
+    preds_combined = np.concatenate(preds_array, axis=1)
+
+    # concat vertically
+    combined_image = np.concatenate([gt_combined, preds_combined], axis=0)
+
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    imageio.imwrite(out_path, combined_image)
+
+
+def save_as_gif(gt, preds, gif_path, fps=10):
+    """
+    - gt (tensor): ground truth tensor with shape (seq_len, h, w, c)
+    - preds (tensor): predictions tensor with shape (seq_len, h, w, c)
+    """
+    seq_len, h, w, c = gt.shape
+    assert gt.shape == preds.shape, "gt and preds must have the same shape"
+
+    frames = []
+    for i in range(seq_len):
+        gt_frame = gt[i].numpy()
+        preds_frame = preds[i].numpy()
+
+        # type check
+        if gt_frame.dtype != np.uint8 or preds_frame.dtype != np.uint8:
+            raise ValueError("gt and preds must be uint8 tensors")
+
+        # handle channels
+        if c == 1:  # only blue channel is present
+            gt_frame = np.concatenate((np.zeros_like(gt_frame), np.zeros_like(gt_frame), gt_frame), axis=-1)
+            preds_frame = np.concatenate((np.zeros_like(preds_frame), np.zeros_like(preds_frame), preds_frame), axis=-1)
+        elif c == 2:  # green and blue channels are present
+            gt_frame = np.concatenate((np.zeros_like(gt_frame[:, :, 0:1]), gt_frame), axis=-1)
+            preds_frame = np.concatenate((np.zeros_like(preds_frame[:, :, 0:1]), preds_frame), axis=-1)
+
+        # concatenate horizontally
+        combined_frame = np.concatenate((gt_frame, preds_frame), axis=1)
+
+        frames.append(combined_frame)
+
+    os.makedirs(os.path.dirname(gif_path), exist_ok=True)
+    imageio.mimsave(gif_path, frames, format='GIF', fps=fps)
 
 
 def save_gif(filename, inputs, duration=0.25):

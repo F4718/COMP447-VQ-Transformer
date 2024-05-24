@@ -14,7 +14,7 @@ import torch.nn.functional as F
 
 
 def main():
-    with open("vqvae_config.json", "r") as file:
+    with open("config_vqvae.json", "r") as file:
         opt = json.load(file)
         opt = SimpleNamespace(**opt)
 

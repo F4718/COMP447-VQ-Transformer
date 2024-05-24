@@ -21,11 +21,13 @@ class VQVAE3D(nn.Module):
             return indices
 
     def decode_code(self, latents):
+        # latents: bs * t * h * w
         with torch.no_grad():
             # move channel to front
             latents = self.codebook.embedding(latents).permute(0, 4, 1, 2, 3).contiguous()
             # bs * c * t * h * w
-            return self.decoder(latents).permute(0, 2, 3, 4, 1).cpu().numpy()
+            # moves channel to end
+            return self.decoder(latents).permute(0, 2, 3, 4, 1).cpu().numpy()  # bs * t * h * w * c
 
     def forward(self, x):
         z = self.encoder(x)
@@ -74,12 +76,13 @@ class VQ3DEncoder(nn.Module):
         )
 
     def forward(self, x):
-        # x: [bs * c * t * h * w]
+        # x: [bs * in_c * t * h * w]
         h = x
         for conv in self.conv_blocks:
             h = F.relu(conv(h))
         h = self.last_conv(h)
         h = self.res_stack(h)
+        # returns [bs * out_c * t * h * w]
         return h
 
 

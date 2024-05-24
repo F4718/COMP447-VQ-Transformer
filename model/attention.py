@@ -537,7 +537,7 @@ class GeLU2(nn.Module):
 
 
 class LayerNorm(nn.Module):
-    def __init__(self, embd_dim, class_cond_dim):
+    def __init__(self, embd_dim, class_cond_dim=None):
         super().__init__()
         self.conditional = class_cond_dim is not None
 

@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from types import SimpleNamespace
 
 
-def plot_loss_curve(path_file, out_path, train_recons=True, test_recons=True, train_vq=True, test_vq=True, clip=0, show=False):
+def vqvae_plot_loss_curve(path_file, out_path, train_recons=True, test_recons=True, train_vq=True, test_vq=True, clip=0, show=False):
     with open(path_file, "r") as f:
         loss_dict = json.load(f)
 
@@ -41,7 +41,46 @@ def plot_loss_curve(path_file, out_path, train_recons=True, test_recons=True, tr
         plt.show()
 
 
-def main(opt):
+def transformer_plot_loss_curve(path_file, out_file_name, clip=0, show=False):
+    with open(path_file, "r") as f:
+        loss_dict = json.load(f)
+
+    train_losses = []
+    test_losses = []
+
+    for epoch, data in loss_dict.items():
+        train_losses.append(data['train_cross_entropy_loss'])
+        test_losses.append(data['test_cross_entropy_loss'])
+
+    # Plotting
+    epochs = [i for i in range(1, len(train_losses) + 1)]
+    plt.figure(figsize=(10, 6))
+
+    plt.plot(epochs[clip:], train_losses[clip:], label='Train Cross Entropy Loss')
+    plt.plot(epochs[clip:], test_losses[clip:], label='Test Cross Entropy Loss')
+
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.title('Training and Test Losses Over Epochs')
+    plt.legend()
+    plt.grid(True)
+    plt.savefig(out_file_name)
+    if show:
+        plt.show()
+
+
+def main():
+    plot_vqvae = False
+    plot_transformer = True
+    if plot_vqvae:
+        with open("config_vqvae.json", "r") as file:
+            opt = json.load(file)
+            opt = SimpleNamespace(**opt)
+    if plot_transformer:
+        with open("config_vq_transformer.json", "r") as file:
+            opt = json.load(file)
+            opt = SimpleNamespace(**opt)
+
     assert opt.model_dir != ""
     loss_file_name = os.path.join(opt.model_dir, "loss/out.json")
     out_out_folder_name = os.path.join(opt.model_dir, "plots/")
@@ -49,12 +88,12 @@ def main(opt):
 
     out_file_name = os.path.join(out_out_folder_name, "training_curve.png")
 
-    plot_loss_curve(loss_file_name, out_file_name, train_recons=True, test_recons=True, train_vq=True, test_vq=True,
-                    clip=5, show=True)
+    if plot_vqvae:
+        vqvae_plot_loss_curve(loss_file_name, out_file_name, train_recons=True, test_recons=True, train_vq=True, test_vq=True,
+                              clip=5, show=True)
+    if plot_transformer:
+        transformer_plot_loss_curve(loss_file_name, out_file_name, show=True)
 
 
 if __name__ == '__main__':
-    with open("vqvae_config.json", "r") as file:
-        opt = json.load(file)
-        opt = SimpleNamespace(**opt)
-    main(opt)
+    main()
