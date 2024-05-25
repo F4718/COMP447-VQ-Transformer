@@ -63,7 +63,7 @@ class ActionConditionedTransformer(nn.Module):
         x = self.embeddings(x)
         x = self.embedding_projection(x)  # bs * seq_len * hid_dim
         # apply the pos enc after the projection
-        x + self.positional_enc[:self.seq_len].unsqueeze(0)
+        x = x + self.positional_enc[:self.seq_len].unsqueeze(0)
 
         action = self.aggregate_actions(action)
         for block in self.blocks:
