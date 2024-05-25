@@ -108,17 +108,18 @@ def main():
             action_rnn_layers=opt.action_rnn_layers, use_vq_embeddings=opt.use_vq_embeddings, codebook=the_codebook)
         predictor = predictor.to(device)
 
-    vq_transformer = VQTransformer(vqvae_model, predictor)
-    opt.optimizer(vq_transformer.parameters(), lr=opt.lr)
+    down_to = opt_vqvae.image_size / (opt_vqvae.downsample ** 2)
+    vq_transformer = VQTransformer(vqvae_model, predictor, t=int(opt_vqvae.time_window), hw_prime=int(down_to))
+    optimizer = opt.optimizer(vq_transformer.parameters(), lr=opt.lr)
 
     min_delta, max_delta = -2, 2
     bin_lims_x, bin_lims_y = create_xy_bins(min_delta, max_delta, (opt.num_x_bins, opt.num_y_bins))
     collate_fn = TransformerCollateFunction(bin_lims_x, bin_lims_y)
 
-    assert opt.n_future % opt_vqvae.n_past == 0
+    assert opt.n_future % opt_vqvae.time_window == 0
     opt.n_past = opt_vqvae.time_window
     opt.channels = opt_vqvae.channels
-    train_data, test_data = load_dataset(opt_vqvae, is_vqvae=False)
+    train_data, test_data = load_dataset(opt, is_vqvae=False)
     train_loader = DataLoader(train_data,
                               num_workers=opt.data_threads,
                               batch_size=opt.batch_size,
@@ -179,28 +180,25 @@ def main():
 
                 # get the initial seq element
                 initial_x = x[0].to(device)
-                encoded_x = vqvae_model.encode_code(initial_x)  # 1 * t * h' * w' -> bs * t * h' * w'
+                encoded_x = vq_transformer.encode_to_indices(initial_x)  # bs * (seq_len = t * h' * w')
 
                 # flatten the quantized indices
-                bs, t, h_prime, w_prime = encoded_x.shape
                 pred_sequences = list()
-                encoded_x = encoded_x.view(bs, -1)  # bs * (seq_len = t * h' * w')
                 pred_sequences.append(encoded_x)
                 # predict next sequences based on the predictions, not gt of course
                 for group_num in range(len(actions)):
                     past_actions = actions[group_num].to(device)
-                    encoded_future_x = vq_transformer.forward_on_indices(encoded_x, past_actions)
+                    encoded_future_x, _ = vq_transformer.forward_on_indices(encoded_x, past_actions)
                     pred_sequences.append(encoded_future_x)
                     encoded_x = encoded_future_x
 
                 reconstructions = list()
                 for seq in pred_sequences:
-                    seq = seq.view(bs, t, h_prime, w_prime)
-                    # decode code inverts the channel dim so the below comment is the out shape
-                    rec = vqvae_model.decode_code(seq)  # bs * t * h * w * c (bs is 1)
-                    reconstructions.append(rec.squeeze(0).cpu())
+                    rec = vq_transformer.decode_from_indices(seq)  # bs * t * h * w * c (bs is 1)
+                    rec = torch.from_numpy(rec)
+                    reconstructions.append(rec.squeeze(0))
 
-                reconstructions = torch.stack(reconstructions, dim=0)  # (num_groups * t) * h * w * c
+                reconstructions = torch.concat(reconstructions, dim=0)  # (num_groups * t) * h * w * c
                 reconstructions = reconstructions.clamp(-1, 1)
                 reconstructions = (((reconstructions + 1) / 2 * 255) // 1)
 
@@ -276,6 +274,8 @@ def main():
             'vqvae': vqvae_model,
             'opt_vqvae': opt_vqvae
         }, '%s/model.pth' % opt.log_dir)
+
+    sample(1, 10)
 
 
 if __name__ == "__main__":

@@ -551,8 +551,8 @@ class LayerNorm(nn.Module):
 
     def forward(self, x, cond):
         if self.conditional:  # (b, cond_dim)
-            g = 1 + self.w(cond['class_cond']).view(x.shape[0], *(1,)*(len(x.shape)-2), x.shape[-1]) # (b, ..., embd_dim)
-            b = self.wb(cond['class_cond']).view(x.shape[0], *(1,)*(len(x.shape)-2), x.shape[-1])
+            g = 1 + self.w(cond).view(x.shape[0], *(1,)*(len(x.shape)-2), x.shape[-1]) # (b, ..., embd_dim)
+            b = self.wb(cond).view(x.shape[0], *(1,)*(len(x.shape)-2), x.shape[-1])
         else:
             g = self.g  # (embd_dim,)
             b = self.b

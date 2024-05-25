@@ -17,15 +17,15 @@ class VQVAE3D(nn.Module):
         with torch.no_grad():
             z = self.encoder(x)
             indices = self.codebook(z)[2]
-            # bs * t * h * w
+            # bs * t * h' * w'
             return indices
 
     def decode_code(self, latents):
-        # latents: bs * t * h * w
+        # latents: bs * t * h' * w'
         with torch.no_grad():
             # move channel to front
             latents = self.codebook.embedding(latents).permute(0, 4, 1, 2, 3).contiguous()
-            # bs * c * t * h * w
+            # bs * c * t * h' * w'
             # moves channel to end
             return self.decoder(latents).permute(0, 2, 3, 4, 1).cpu().numpy()  # bs * t * h * w * c
 

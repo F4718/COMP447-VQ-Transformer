@@ -58,7 +58,7 @@ class ActionConditionedTransformer(nn.Module):
 
     def forward(self, x, action=None):
         # x: bs * seq_len (encoded indices), seq_len is the number of quantized vectors of t frame
-        # action: bs * t * n (action indices)
+        # action: bs * t * n or bs * n (action indices)
 
         x = self.embeddings(x)
         x = self.embedding_projection(x)  # bs * seq_len * hid_dim
