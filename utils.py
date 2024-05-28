@@ -48,6 +48,10 @@ def load_dataset(optt, is_vqvae=False):
         size = 0.2
     elif size == "tiny":
         size = 0.02
+    elif size == "few":
+        size = 0.001
+    else:
+        assert False
 
     train_data = Dataset(opt.data_root, seq_length, step, opt.channels == 1)
     all_samples = train_data.samples

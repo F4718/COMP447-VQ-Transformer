@@ -13,6 +13,10 @@ class VQTransformer(nn.Module):
         self.t = t
         self.hw_prime = hw_prime
 
+        for param in self.vqvae.parameters():
+            param.requires_grad = False
+        self.vqvae.eval()
+
     def forward(self, x, action=None):
         """
         x:          bs * c * t * h * w
@@ -52,3 +56,8 @@ class VQTransformer(nn.Module):
         pred_indices, pred_logits = self.forward_on_indices(encoded_past, actions)
         loss = F.cross_entropy(pred_logits, encoded_future)
         return loss
+
+    def train(self, mode=True):
+        super(VQTransformer, self).train(mode)
+        # keep vqvae in eval mode regardless of the outer model's mode
+        self.vqvae.eval()

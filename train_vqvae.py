@@ -19,7 +19,8 @@ def main():
 
     if opt.model_dir != '':
         # load model and continue training from checkpoint
-        saved_model = torch.load('%s/model.pth' % opt.model_dir)
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        saved_model = torch.load('%s/model.pth' % opt.model_dir, map_location=device)
         epochs = opt.epochs
         optimizer = opt.optimizer
         model_dir = opt.model_dir
