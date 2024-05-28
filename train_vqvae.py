@@ -32,7 +32,8 @@ def main():
     else:
         down_to = opt.image_size / (opt.downsample**2)
         name = f'vqvae-{opt.image_size}x{opt.image_size}-down_to={down_to}x{down_to}-' \
-               f'time_wind={opt.time_window}-emb_size={opt.vq_emb_size}-n_res={opt.n_res}-bias={opt.conv_bias}'
+               f'time_wind={opt.time_window}-emb_size={opt.vq_emb_size}-codebook_size={opt.codebook_num_emb}-' \
+               f'n_res={opt.n_res}-bias={opt.conv_bias}'
         dataset = "road_only" if opt.channels == 1 else "with_objects"
         opt.log_dir = '%s/%s/%s' % (opt.log_dir, dataset + "_" + opt.train_on, name)
 

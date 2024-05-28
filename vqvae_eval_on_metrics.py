@@ -162,7 +162,11 @@ def main():
     print("Saving results.\n")
     eval_f_name = '%s/evaluation/results.json' % opt.log_dir
     with open(eval_f_name, 'w') as file:
-        json.dump({"test_recon_loss": recon_loss, "test_miou": mean_iou, "test_ssim": ssim_score}, file, indent=4)
+        json.dump({
+            "test_recon_loss": float(recon_loss),
+            "test_miou": float(mean_iou),
+            "test_ssim": float(ssim_score)
+        }, file, indent=4)
     print(f"Results saved to {eval_f_name}\n")
 
 
