@@ -92,7 +92,7 @@ def main():
         vqvae_plot_loss_curve(loss_file_name, out_file_name, train_recons=True, test_recons=True, train_vq=True, test_vq=True,
                               clip=5, show=True)
     if plot_transformer:
-        transformer_plot_loss_curve(loss_file_name, out_file_name, show=True)
+        transformer_plot_loss_curve(loss_file_name, out_file_name, show=False)
 
 
 if __name__ == '__main__':
