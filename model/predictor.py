@@ -67,6 +67,7 @@ class ConcatConditionedTransformer(nn.Module):
         # get the action embeddings:
         action = self.aggregate_actions(action)  # bs * total_cond_dim
         action = action.unsqueeze(1)             # bs * 1 * total_cond_dim (for broadcast)
+        action = action.expand(-1, self.seq_len, -1)
 
         # concat the actions to the sequence tokens
         x = torch.cat((x, action), dim=-1)      # bs * seq_len * (hid_dim + total_cond_dim)

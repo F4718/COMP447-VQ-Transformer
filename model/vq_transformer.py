@@ -54,6 +54,7 @@ class VQTransformer(nn.Module):
         encoded_future = self.encode_to_indices(future_x)
 
         pred_indices, pred_logits = self.forward_on_indices(encoded_past, actions)
+        pred_logits = pred_logits.permute(0, 2, 1)
         loss = F.cross_entropy(pred_logits, encoded_future)
         return loss
 
