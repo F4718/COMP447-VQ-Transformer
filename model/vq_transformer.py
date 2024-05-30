@@ -22,6 +22,10 @@ class VQTransformer(nn.Module):
         x:          bs * c * t * h * w
         action:     bs * t * n or bs * n or None?
         """
+        x = self.encode_to_indices(x)
+        x, _ = self.forward_on_indices(x, action)
+        x = self.decode_from_indices(x)
+        return x  # bs * t * h * w * c (returns numpy) values between -1 and 1
 
     def encode_to_indices(self, x):
         # x: bs * c * t * h * w

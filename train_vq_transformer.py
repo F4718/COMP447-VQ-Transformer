@@ -1,4 +1,4 @@
-from model import ActionConditionedTransformer, VQVAE3D
+from model import ActionConditionedTransformer, ConcatConditionedTransformer, VQVAE3D
 import json
 import os
 import random
@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import numpy as np
 import torch
 import torch.optim as optim
-from model import VQTransformer, ConcatConditionedTransformer
+from model import VQTransformer
 from utils import load_dataset, normalize_data, reshape_data, save_transformer_losses, save_as_gif, save_as_image
 from data_preprocess.preprocess_data import create_xy_bins
 from torch.utils.data import DataLoader
