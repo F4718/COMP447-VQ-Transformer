@@ -77,7 +77,7 @@ def main():
     test_loader = DataLoader(test_data,
                              batch_size=opt.batch_size,
                              shuffle=False,
-                             drop_last=False,
+                             drop_last=True,
                              pin_memory=True,
                              collate_fn=collate_fn)
 
