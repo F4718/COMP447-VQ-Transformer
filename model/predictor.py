@@ -7,6 +7,118 @@ from model.vqvae import CodeBook
 from model.attention import LayerNorm as CondLayerNorm
 
 
+class ConcatConditionedTransformer(nn.Module):
+    def __init__(self, vocab_size, hid_dim, num_blocks, num_heads, attn_drop, seq_len, positional_type="sinusoidal",
+                 action_condition=None,  # this one will be ignored, assume always True
+                 use_vq_embeddings=False, codebook=None,
+                 first_action_only=False, action_rnn_layers=None,
+                 num_cond_bins=None, total_cond_dim=None, dim_per_action=None):
+        super(ConcatConditionedTransformer, self).__init__()
+        assert action_condition, "ConcatConditionedTransformer requires action condition."
+        assert (hid_dim + total_cond_dim) % num_heads == 0
+        assert total_cond_dim % ((hid_dim + total_cond_dim) // num_heads) == 0, "total_cond_dim must be divisible by " \
+                                                                                "the dimensionality of a head"
+
+        # embeddings
+        if use_vq_embeddings:
+            assert codebook is not None, "use_vq_embeddings=True but no codebook provided!"
+            assert isinstance(codebook, CodeBook), "codebook must be an instance of CodeBook class"
+
+            self.embeddings = codebook.embedding
+            self.embedding_projection = nn.Linear(codebook.embedding.embedding_dim, hid_dim)
+            for param in self.embeddings.parameters():
+                param.requires_grad = False
+        else:
+            self.embeddings = nn.Embedding(vocab_size, hid_dim)
+            self.embedding_projection = nn.Identity()
+
+        # positional encodings
+        self.seq_len = seq_len
+        self.hid_dim = hid_dim + total_cond_dim
+        self.positional_enc = self.init_positionals(positional_type)
+
+        # attention blocks
+        self.blocks = nn.ModuleList([
+            TransformerBlock(self.hid_dim, num_heads, attn_drop, action_condition=False, cond_dim=None) for _ in
+            range(num_blocks)
+        ])
+
+        # handle actions
+        self.action_embeddings = nn.Embedding(num_embeddings=num_cond_bins, embedding_dim=dim_per_action)
+        self.first_action_only = first_action_only
+        if not first_action_only:
+            self.action_rnn = ActionGRU(total_cond_dim, 2 * total_cond_dim, action_rnn_layers)
+        else:
+            self.action_rnn = nn.Identity()
+
+        # layer norm
+        self.layer_norm = CondLayerNorm(self.hid_dim, class_cond_dim=None)
+
+        # out layer
+        self.out_layer = nn.Linear(self.hid_dim, vocab_size)
+
+    def forward(self, x, action):
+        # x: bs * seq_len (encoded indices), seq_len is the number of quantized vectors of t frame
+        # action: bs * t * n or bs * n (action indices)
+
+        x = self.embeddings(x)
+        x = self.embedding_projection(x)  # bs * seq_len * hid_dim
+
+        # get the action embeddings:
+        action = self.aggregate_actions(action)  # bs * total_cond_dim
+        action = action.unsqueeze(1)             # bs * 1 * total_cond_dim (for broadcast)
+
+        # concat the actions to the sequence tokens
+        x = torch.cat((x, action), dim=-1)      # bs * seq_len * (hid_dim + total_cond_dim)
+
+        # apply the pos enc after the projection
+        x = x + self.positional_enc[:self.seq_len].unsqueeze(0)
+
+        for block in self.blocks:
+            x = block(x, action=None)
+
+        x = self.layer_norm(x, action=None)
+        logits = self.out_layer(x)
+
+        # bs * seq_len * vocab_size
+        return logits
+
+    def aggregate_actions(self, actions):
+        if self.first_action_only:
+            # actions: bs * n
+            bs, _ = actions.shape
+            action_vecs = self.action_embeddings(actions)  # bs * n * dim_per_action
+            action_vecs = action_vecs.view(bs, -1)  # bs * (n * dim_per_action) dim_per_action's are concatenated
+        else:
+            # actions: bs * t * n
+            bs, t, n = actions.shape
+            action_vecs = self.action_embeddings(actions)  # bs * t * n * dim_per_action
+            action_vecs = action_vecs.view(bs, t,
+                                           -1)  # bs * t * (n * dim_per_action) dim_per_action's are concatenated
+
+        # it should return bs * total_cond_dim (total_cond_dim = n * dim_per_action)
+        # if first_action_only -> Identity, else: GRU
+        action_vecs = self.action_rnn(action_vecs)
+
+        return action_vecs
+
+    def init_positionals(self, positional_type):
+        seq_len = self.seq_len
+        hid_dim = self.hid_dim
+        if positional_type == 'sinusoidal':
+            position = torch.arange(0, seq_len).unsqueeze(1)
+            div_term = torch.exp(torch.arange(0, hid_dim, 2) * -(math.log(10000.0) / hid_dim))
+            pe = torch.zeros(seq_len, hid_dim)
+            pe[:, 0::2] = torch.sin(position * div_term)
+            pe[:, 1::2] = torch.cos(position * div_term)
+            pe = nn.Parameter(pe, requires_grad=False)
+        elif positional_type == 'learnable':
+            pe = nn.Parameter(torch.randn(seq_len, hid_dim))
+        else:
+            assert False, f"Type {positional_type} positional encodings not implemented"
+        return pe
+
+
 class ActionConditionedTransformer(nn.Module):
     def __init__(self, vocab_size, hid_dim, num_blocks, num_heads, attn_drop, seq_len, positional_type="sinusoidal",
                  action_condition=False, total_cond_dim=None, dim_per_action=None, num_cond_bins=None,
@@ -181,7 +293,7 @@ class SingleHeadAttention(nn.Module):
     def forward(self, k, q, v, mask=None):
         """
         x: (batch_size, seq_len, d_model // num_heads)
-        mask: (seq_len, seq_len) for training, (seq_len) for inference bc of autoregression
+        mask: (seq_len, seq_len) for training and inference
         """
         key = self.key(k)
         query = self.query(q)

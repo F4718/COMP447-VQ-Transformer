@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import numpy as np
 import torch
 import torch.optim as optim
-from model import VQTransformer
+from model import VQTransformer, ConcatConditionedTransformer
 from utils import load_dataset, normalize_data, reshape_data, save_transformer_losses, save_as_gif, save_as_image
 from data_preprocess.preprocess_data import create_xy_bins
 from torch.utils.data import DataLoader
@@ -47,12 +47,16 @@ def main():
         decoder = saved_vqvae['decoder']
         vqvae_model = VQVAE3D(encoder, decoder, codebook).to(device)
 
-        vqvae_name = opt.vqvae_model_dir.split("/")[-1]
-        vq_transformer_name = f"transformer-hid_dim={opt.transformer_hid_dim}-num_blocks={opt.transformer_blocks}-" \
+        # vqvae_name = opt.vqvae_model_dir.split("/")[-1]
+        model_type = "concat_cond" if opt.model_type == "concat_conditioned" else None
+        model_type = "layer_cond" if opt.model_type == "layer_conditioned" else model_type
+        vq_transformer_name = f"model-type={model_type}-" \
+                              f"e{opt_vqvae.vq_emb_size}-s{opt_vqvae.codebook_num_emb}-" \
+                              f"transformer-hid_dim={opt.transformer_hid_dim}-num_blocks={opt.transformer_blocks}-" \
                               f"attn_heads={opt.num_attention_heads}-pos_enc={opt.positional_encoding_type}-" \
                               f"action_cond={opt.is_action_conditioned}-dim_per_action={opt.dim_per_action}-" \
                               f"actions_per_frame={opt.num_actions_per_frame}-first_action_only={opt.first_action_only}-" \
-                              f"action_rnn_lay={opt.action_rnn_layers}-use_vq_emb={opt.use_vq_embeddings}----{vqvae_name}"
+                              f"action_rnn_lay={opt.action_rnn_layers}-use_vq_emb={opt.use_vq_embeddings}"
         dataset = "road_only" if opt_vqvae.channels == 1 else "with_objects"
         opt.log_dir = '%s/%s/%s' % (opt.log_dir, dataset + "_" + opt.train_on, vq_transformer_name)
 
@@ -95,11 +99,12 @@ def main():
     if opt.model_dir != '':
         predictor = saved_model["transformer"]
     else:
+        PredictorClass = ConcatConditionedTransformer if opt.model_type == "concat_conditioned" else ActionConditionedTransformer
         down_to = opt_vqvae.image_size / (opt_vqvae.downsample ** 2)
         seq_len = int((down_to ** 2) * opt_vqvae.time_window)
         vocab_size = opt_vqvae.codebook_num_emb
         the_codebook = codebook if opt.use_vq_embeddings else None
-        predictor = ActionConditionedTransformer(
+        predictor = PredictorClass(
             vocab_size=vocab_size, hid_dim=opt.transformer_hid_dim, num_blocks=opt.transformer_blocks,
             num_heads=opt.num_attention_heads, attn_drop=opt.attention_dropout, seq_len=seq_len,
             positional_type=opt.positional_encoding_type, action_condition=opt.is_action_conditioned,
@@ -274,8 +279,6 @@ def main():
             'vqvae': vqvae_model,
             'opt_vqvae': opt_vqvae
         }, '%s/model.pth' % opt.log_dir)
-
-    sample(1, 10)
 
 
 if __name__ == "__main__":
