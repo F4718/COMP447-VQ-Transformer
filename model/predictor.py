@@ -78,7 +78,7 @@ class ConcatConditionedTransformer(nn.Module):
         for block in self.blocks:
             x = block(x, action=None)
 
-        x = self.layer_norm(x, action=None)
+        x = self.layer_norm(x, cond=None)
         logits = self.out_layer(x)
 
         # bs * seq_len * vocab_size
