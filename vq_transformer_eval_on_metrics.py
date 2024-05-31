@@ -152,7 +152,7 @@ def main():
             # actions: (num_group - 1) * bs * t * 8 or (num_group - 1) * bs * 8
             for group_num in range(len(actions)):
                 past_x = x[group_num].to(device)
-                future_x = x[group_num + 1]
+                future_x = x[group_num + 1].clone()
                 past_actions = actions[group_num].to(device)
 
                 # (bs * t * h * w * c) returns values between -1 and 1 (numpy)
@@ -169,9 +169,9 @@ def main():
                 future_x = ((future_x + 1) / 2).clamp(0, 1)
 
                 for t in range(future_x.size(0)):
-                    mse.append(reconstruction_criterion(prediction, future_x).item())
-                    miou.append(calculate_mean_iou(prediction, future_x, True))
-                    ssim.append(calculate_ssim(prediction, future_x))
+                    mse.append(reconstruction_criterion(prediction[t], future_x[t]).item())
+                    miou.append(calculate_mean_iou(prediction[t], future_x[t], True))
+                    ssim.append(calculate_ssim(prediction[t], future_x[t]))
 
         return torch.tensor(mse), torch.tensor(miou), torch.tensor(ssim)
 
